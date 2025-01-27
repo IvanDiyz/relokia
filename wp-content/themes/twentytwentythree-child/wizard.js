@@ -3,7 +3,7 @@ const resultText = {
   Error: `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><path fill="#FF0000" d="M2.653 35C.811 35-.001 33.662.847 32.027L16.456 1.972c.849-1.635 2.238-1.635 3.087 0l15.609 30.056c.85 1.634.037 2.972-1.805 2.972H2.653z"/><path fill="#E5E5E5" d="M15.583 28.953c0-1.333 1.085-2.418 2.419-2.418 1.333 0 2.418 1.085 2.418 2.418 0 1.334-1.086 2.419-2.418 2.419-1.334 0-2.419-1.085-2.419-2.419zm.186-18.293c0-1.302.961-2.108 2.232-2.108 1.241 0 2.233.837 2.233 2.108v11.938c0 1.271-.992 2.108-2.233 2.108-1.271 0-2.232-.807-2.232-2.108V10.66z"/></svg>
     We cannot send you email right now. Use alternative way to contact us `,
-}
+};
 
 let formData = {
   setPrice() {
@@ -13,12 +13,14 @@ let formData = {
       return "$100";
     } else if (this.quantity >= 101 && this.quantity <= 1000) {
       return "$1000";
+    } else {
+      this.quantity = 1000;
+      return "$1000";
     }
   },
 };
 
 function objectjsx(result) {
-  
   return (contentObject = {
     Contact: `
       <div class="customCard-body">
@@ -187,10 +189,24 @@ function objectjsx(result) {
 let contentBody = document.querySelector(".change_block");
 
 contentBody.addEventListener("click", (event) => {
+  const input = document.getElementById("quantity");
+
+  if (input) {
+    input.addEventListener("input", function () {
+      handleInputChange(input.value);
+    });
+  }
+
+  function handleInputChange(value) {
+    if (value > 1000) {
+      input.value = 1000;
+    }
+  }
+
   let navItems = document.querySelectorAll(".nav-item");
   const buttonCheck = event.target.closest(".btn");
   if (!buttonCheck) return;
-  
+
   const myForm = document.getElementById("myForm");
   const currentActive = document.querySelector(".nav-item.active");
   const currentIndex = Array.from(navItems).indexOf(currentActive);
@@ -200,10 +216,10 @@ contentBody.addEventListener("click", (event) => {
 
   myForm && collectFormData(myForm);
 
-  if(!emailRegex.test(formData.email) || !formData.email) return
-  
+  if (!emailRegex.test(formData.email) || !formData.email) return;
+
   navItems.forEach((item) => item.classList.remove("active"));
-  
+
   if (event.target.dataset.type === "next") {
     actualIndex = (currentIndex + 1) % navItems.length;
     navItems[actualIndex].classList.add("active");
@@ -215,16 +231,15 @@ contentBody.addEventListener("click", (event) => {
     actualType = navItems[actualIndex].innerText.split(" ")[0];
     changeBtn(actualType);
   } else if (event.target.dataset.type === "reload") {
-      window.location.reload();
+    window.location.reload();
   }
-
 });
 
 function changeBtn(type, navItems) {
-  if(type === 'Price' && !formData.quantity) {
+  if (type === "Price" && !formData.quantity) {
     navItems.forEach((item) => item.classList.remove("active"));
     navItems[1].classList.add("active");
-    return
+    return;
   }
   contentObject = objectjsx();
   contentBody.innerHTML = contentObject[type];
@@ -248,31 +263,50 @@ function collectFormData(form) {
 
 function setResult(data) {
   const currentActive = document.querySelector(".result");
-  currentActive.classList.add(data)
-  currentActive.innerHTML = resultText[data]
+  currentActive.classList.add(data);
+  currentActive.innerHTML = resultText[data];
 }
 
 function submitFormData() {
+  let price = formData.setPrice();
+  console.log("formData", price);
+  const formDataAjax = {
+    name: formData.name,
+    email: formData.email,
+    phone: formData.phone,
+    quantity: formData.quantity,
+    price: price,
+  };
 
-  fetch('http://relokia/wp-json/my_custom_namespace/v1/submit-form', {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(formData),
-  })
-  .then(response => response.json())
-  .then(data => {
-      if (data === 'Success') {
-        formData.result = data
-        setResult(data)
-      } else {
-        formData.result = data
-        setResult(data)
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/wp-admin/admin-ajax.php", true);
+  xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+
+  xhr.onload = function () {
+    if (xhr.status === 200) {
+      try {
+        const response = JSON.parse(xhr.responseText);
+        console.log("Ответ сервера:", response);
+        if (response.success) {
+          formData.result = "Success";
+          setResult("Success");
+        } else {
+          console.log(
+            "Произошла ошибка при отправке данных. Ответ сервера:",
+            response
+          );
+          formData.result = "Error";
+          setResult("Error");
+        }
+      } catch (error) {
+        console.log("Ошибка при разборе ответа JSON:", error);
+        console.log("Ответ сервера (не JSON):", xhr.responseText);
       }
-  })
-  .catch(error => {
-      formData.result = error
-      setResult(error)
-  });
+    } else {
+      console.log("Ошибка при отправке запроса. Статус:", xhr.status);
+      console.log("Ответ от сервера:", xhr.responseText);
+    }
+  };
+  const data = `action=send_wizard_form_data&name=${formDataAjax.name}&email=${formDataAjax.email}&phone=${formDataAjax.phone}&quantity=${formDataAjax.quantity}&price=${formDataAjax.price}`;
+  xhr.send(data);
 }

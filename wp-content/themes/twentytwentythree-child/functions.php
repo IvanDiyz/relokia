@@ -13,53 +13,44 @@ function twentytwentythree_child_enqueue_styles()
     wp_enqueue_script('wizard-script', get_stylesheet_directory_uri() . '/wizard.js', array('jquery'), null, true);
 }
 add_action('wp_enqueue_scripts', 'twentytwentythree_child_enqueue_styles');
-add_action('rest_api_init', 'my_custom_form_data_endpoint');
 
-function my_custom_form_data_endpoint() {
-    register_rest_route('my_custom_namespace/v1', '/submit-form', [
-        'methods' => 'POST',
-        'callback' => 'my_form_data_handler',
-        'permission_callback' => '__return_true',
-    ]);
-}
+// Обработчик AJAX запроса
+function handle_wizard_form_data() {
+    $name = sanitize_text_field($_POST['name']);
+    $email = sanitize_email($_POST['email']);
+    $phone = sanitize_text_field($_POST['phone']);
+    $quantity = intval($_POST['quantity']);
+    $price =  sanitize_text_field($_POST['price']);
 
-function my_form_data_handler(WP_REST_Request $request) {
-    $name = $request->get_param('name');
-    $email = $request->get_param('email');
-    $phone = $request->get_param('phone');
-    $quantity = $request->get_param('quantity');
+    // Формируем письмо
+    $to = 'cijaydorosh@gmail.com'; // Укажите свой email
+    $subject = 'Данные из формы';
+    $message = "
+        <h2>Данные из формы:</h2>
+        <p><strong>Имя:</strong> $name</p>
+        <p><strong>Email:</strong> $email</p>
+        <p><strong>Телефон:</strong> $phone</p>
+        <p><strong>Количество:</strong> $quantity</p>
+        <p><strong>Цена:</strong> $price</p>
+    ";
 
-     $to = 'cijaydiyz@gmail.com';
-     $subject = 'New Form Submission';
-     $message = "Name: $name\nEmail: $email\nPhone: $phone\nQuantity: $quantity";
-     $headers = ['Content-Type: text/plain; charset=UTF-8'];
+    // Отправляем письмо
+    $headers = array('Content-Type: text/html; charset=UTF-8');
+    $mail_sent = wp_mail($to, $subject, $message, $headers);
 
-     $is_mail_sent = wp_mail($to, $subject, $message, $headers);
-     if (!$is_mail_sent) {
-         error_log('Mail not sent: Check your mail server configuration.');
-     }
-
-   
-    $post_data = [
-        'post_title'   => sanitize_text_field($name),
-        'post_content' => sanitize_textarea_field($phone),
-        'post_status'  => 'publish',
-        'post_type'    => 'post', 
-    ];
-
-    $post_id = wp_insert_post($post_data);
-
-    if (!is_wp_error($post_id)) {
-        update_post_meta($post_id, '_name', sanitize_text_field($name));
-        update_post_meta($post_id, '_phone', sanitize_text_field($phone));
-        update_post_meta($post_id, '_email', sanitize_email($email));
-        update_post_meta($post_id, '_quantity', sanitize_text_field($quantity));
-
-        return new WP_REST_Response('Success', 200);
+    // Возвращаем результат
+    if ($mail_sent) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error();
     }
 
-    return new WP_REST_Response('Error', 400);
+    wp_die(); 
 }
+
+// Регистрируем обработчик AJAX
+add_action('wp_ajax_send_wizard_form_data', 'handle_wizard_form_data'); 
+add_action('wp_ajax_nopriv_send_wizard_form_data', 'handle_wizard_form_data'); 
 
 
 function render_wizard_shortcode($atts, $content = null)
@@ -151,8 +142,8 @@ function render_wizard_shortcode($atts, $content = null)
                             </div>
                         </div>
                         <div class="footer">
-                            <h1><?php echo esc_html($atts['title']); ?></h1>
-                            <p><?php echo wp_kses_post($content); ?></p>
+                            <h1 class="footer__title"><?php echo esc_html($atts['title']); ?></h1>
+                            <p class="footer__text"><?php echo wp_kses_post($content); ?></p>
                         </div>
                     </div>
                 </div>
